@@ -1,0 +1,113 @@
+version: "2"
+ 
+networks:
+    monitor:
+        driver: bridge
+ 
+services:
+    prometheus:
+        image: prom/prometheus:latest
+        container_name: prometheus
+        hostname: prometheus
+        restart: always
+        volumes:
+            - ${VOLUMES_CONFIG}prometheus.yml:/etc/prometheus/prometheus.yml
+        ports:
+            - "9090:9090"
+        networks:
+            - ${NETWORKS}
+
+    node-exporter:
+        image: quay.io/prometheus/node-exporter:latest
+        container_name: node-exporter
+        hostname: node-exporter
+        restart: always
+        ports:
+            - "9100:9100"
+        networks:
+            - ${NETWORKS}
+ 
+    cadvisor:
+        image: gcr.io/cadvisor/cadvisor:latest
+        container_name: cadvisor
+        hostname: cadvisor
+        restart: always
+        volumes:
+            - /:/rootfs:ro
+            - /var/run/docker.sock:/var/run/docker.sock:rw
+            - /sys:/sys:ro
+            - /var/lib/docker/:/var/lib/docker:ro
+            - /cgroup:/sys/fs/cgroup:ro
+        cgroup_parent: m-executor-abcd
+        ports:
+          - "8080:8080"
+        networks:
+          - ${NETWORKS}        
+
+    grafana:
+        image: grafana/grafana:7.3.7
+        container_name: grafana
+        hostname: grafana
+        restart: always
+        ports:
+            - "3000:3000"
+        environment:
+          - GF_SERVER_DOMAIN=127.0.0.1:3000
+          - GF_RENDERING_SERVER_URL=http://renderer:8081/render
+          - GF_RENDERING_CALLBACK_URL=http://grafana:3000/
+          - GF_LOG_FILTERS="debug"
+          - GF_SECURITY_ADMIN_USER=${GRAFANA_USERNAME}
+          - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+        networks:
+            - ${NETWORKS}
+
+    renderer:
+        image: grafana/grafana-image-renderer:latest
+        container_name: renderer
+        restart: always
+        deploy:
+            resources:
+                limits:
+                  cpus: "1.0"
+                  memory: 3512M
+        environment:
+          - RENDERING_VERBOSE_LOGGING="true"
+          - LOG_LEVEL="debug"
+          - ENABLE_METRICS="true"
+          - IGNORE_HTTPS_ERRORS="true"
+        ports:
+          - 8081:8081
+        networks:
+          - ${NETWORKS}
+
+    influxdb:
+        image: influxdb:1.8
+        restart: always
+        container_name: influxdb
+        ports:
+          - "8086:8086"
+          - "8083:8083"
+        volumes:
+          - ./var/docker/data/influxdb:/var/lib/influxdb:cached
+        environment:
+          - INFLUXDB_DB="loadTestingDB"
+          - INFLUXDB_ADMIN_USER=${INFLUXDB_USERNAME}
+          - INFLUXDB_ADMIN_PASSWORD=${INFLUXDB_PASSWORD}
+          - INFLUXDB_DATA_INDEX_VERSION="tsi1"
+        networks:
+          - ${NETWORKS}
+
+    chronograf:
+        image: chronograf:latest
+        restart: always
+        container_name: chronograf
+        ports:
+          - "8888:8888"
+        depends_on:
+          - influxdb
+        environment:
+          - INFLUXDB_URL='http://influxdb:8086'
+          - INFLUXDB_USERNAME=${INFLUXDB_USERNAME}
+          - INFLUXDB_PASSWORD=${INFLUXDB_PASSWORD}
+        networks:
+          - ${NETWORKS}
