@@ -1,4 +1,4 @@
-version: "2"
+version: "3"
  
 networks:
     monitor:
@@ -6,12 +6,12 @@ networks:
  
 services:
     prometheus:
-        image: prom/prometheus:latest
+        image: prom/prometheus:v2.1.0
         container_name: prometheus
         hostname: prometheus
         restart: always
         volumes:
-            - ${VOLUMES_CONFIG}prometheus.yml:/etc/prometheus/prometheus.yml
+            - ${VOLUMES_CONFIG}prometheus.yml:/etc/prometheus/prometheus.yaml
         ports:
             - "9090:9090"
         networks:
@@ -32,13 +32,11 @@ services:
         container_name: cadvisor
         hostname: cadvisor
         restart: always
+        privileged: true
         volumes:
             - /:/rootfs:ro
             - /var/run/docker.sock:/var/run/docker.sock:rw
-            - /sys:/sys:ro
             - /var/lib/docker/:/var/lib/docker:ro
-            - /cgroup:/sys/fs/cgroup:ro
-        cgroup_parent: m-executor-abcd
         ports:
           - "8080:8080"
         networks:
@@ -66,10 +64,10 @@ services:
         container_name: renderer
         restart: always
         deploy:
-            resources:
-                limits:
-                  cpus: "1.0"
-                  memory: 3512M
+          resources:
+            limits:
+              cpus: "1.0"
+              memory: 3512M
         environment:
           - RENDERING_VERBOSE_LOGGING="true"
           - LOG_LEVEL="debug"
@@ -88,12 +86,11 @@ services:
           - "8086:8086"
           - "8083:8083"
         volumes:
-          - ./var/docker/data/influxdb:/var/lib/influxdb:cached
+          - ./influxdb/etc:/etc/influxdb
         environment:
           - INFLUXDB_DB="loadTestingDB"
           - INFLUXDB_ADMIN_USER=${INFLUXDB_USERNAME}
           - INFLUXDB_ADMIN_PASSWORD=${INFLUXDB_PASSWORD}
-          - INFLUXDB_DATA_INDEX_VERSION="tsi1"
         networks:
           - ${NETWORKS}
 
